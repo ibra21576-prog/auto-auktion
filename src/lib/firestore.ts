@@ -3,7 +3,6 @@ import {
   doc,
   addDoc,
   updateDoc,
-  deleteDoc,
   getDoc,
   getDocs,
   query,
@@ -16,7 +15,32 @@ import {
   increment,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Auction, Bid, ChatMessage, PaymentRecord } from '@/types';
+import { Auction, Bid, ChatMessage, PaymentRecord, User } from '@/types';
+
+// ─── Timestamp normalization ──────────────────────────────
+
+function toDate(ts: unknown): Date {
+  if (!ts) return new Date();
+  if (ts instanceof Date) return ts;
+  if (ts instanceof Timestamp) return ts.toDate();
+  if (typeof ts === 'object' && ts !== null && 'toDate' in ts) {
+    return (ts as { toDate: () => Date }).toDate();
+  }
+  if (typeof ts === 'object' && ts !== null && 'seconds' in ts) {
+    return new Date((ts as { seconds: number }).seconds * 1000);
+  }
+  return new Date(ts as string | number);
+}
+
+function normalizeAuction(data: Record<string, unknown>, id: string): Auction {
+  return {
+    ...data,
+    id,
+    startTime: toDate(data.startTime),
+    endTime: toDate(data.endTime),
+    createdAt: toDate(data.createdAt),
+  } as Auction;
+}
 
 // ─── Auctions ────────────────────────────────────────────
 
@@ -31,7 +55,7 @@ export async function createAuction(data: Omit<Auction, 'id' | 'createdAt'>) {
 export async function getAuction(id: string) {
   const snap = await getDoc(doc(db, 'auctions', id));
   if (!snap.exists()) return null;
-  return { id: snap.id, ...snap.data() } as Auction;
+  return normalizeAuction(snap.data(), snap.id);
 }
 
 export async function getActiveAuctions() {
@@ -42,7 +66,7 @@ export async function getActiveAuctions() {
     orderBy('endTime', 'asc')
   );
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }) as Auction);
+  return snap.docs.map(d => normalizeAuction(d.data(), d.id));
 }
 
 export async function getAuctionsBySeller(sellerId: string) {
@@ -52,13 +76,13 @@ export async function getAuctionsBySeller(sellerId: string) {
     orderBy('createdAt', 'desc')
   );
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }) as Auction);
+  return snap.docs.map(d => normalizeAuction(d.data(), d.id));
 }
 
 export async function getAllAuctions() {
   const q = query(collection(db, 'auctions'), orderBy('createdAt', 'desc'));
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }) as Auction);
+  return snap.docs.map(d => normalizeAuction(d.data(), d.id));
 }
 
 export async function updateAuction(id: string, data: Partial<Auction>) {
@@ -70,6 +94,10 @@ export async function approveAuction(id: string) {
     approved: true,
     status: 'active',
   });
+}
+
+export async function rejectAuction(id: string) {
+  await updateDoc(doc(db, 'auctions', id), { status: 'cancelled' });
 }
 
 export async function endAuction(id: string, winnerId: string) {
@@ -84,7 +112,7 @@ export async function endAuction(id: string, winnerId: string) {
 export function onAuctionUpdate(id: string, callback: (auction: Auction) => void) {
   return onSnapshot(doc(db, 'auctions', id), (snap) => {
     if (snap.exists()) {
-      callback({ id: snap.id, ...snap.data() } as Auction);
+      callback(normalizeAuction(snap.data(), snap.id));
     }
   });
 }
@@ -97,20 +125,29 @@ export function onActiveAuctions(callback: (auctions: Auction[]) => void) {
     orderBy('endTime', 'asc')
   );
   return onSnapshot(q, (snap) => {
-    callback(snap.docs.map(d => ({ id: d.id, ...d.data() }) as Auction));
+    callback(snap.docs.map(d => normalizeAuction(d.data(), d.id)));
+  });
+}
+
+export function onAuctionsBySeller(sellerId: string, callback: (auctions: Auction[]) => void) {
+  const q = query(
+    collection(db, 'auctions'),
+    where('sellerId', '==', sellerId),
+    orderBy('createdAt', 'desc')
+  );
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map(d => normalizeAuction(d.data(), d.id)));
   });
 }
 
 // ─── Bids ────────────────────────────────────────────────
 
 export async function placeBid(auctionId: string, bid: Omit<Bid, 'id'>) {
-  // Add bid to subcollection
   const bidRef = await addDoc(collection(db, 'auctions', auctionId, 'bids'), {
     ...bid,
     timestamp: serverTimestamp(),
   });
 
-  // Update auction with new highest bid
   await updateDoc(doc(db, 'auctions', auctionId), {
     currentBid: bid.amount,
     highestBidderId: bid.userId,
@@ -149,6 +186,26 @@ export function onChatMessages(auctionId: string, callback: (messages: ChatMessa
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map(d => ({ id: d.id, ...d.data() }) as ChatMessage));
   });
+}
+
+// ─── Users / Dealers ─────────────────────────────────────
+
+export async function getPendingDealers(): Promise<User[]> {
+  const q = query(
+    collection(db, 'users'),
+    where('role', '==', 'dealer'),
+    where('verified', '==', false)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ uid: d.id, ...d.data() }) as User);
+}
+
+export async function approveDealer(uid: string) {
+  await updateDoc(doc(db, 'users', uid), { verified: true });
+}
+
+export async function rejectDealer(uid: string) {
+  await updateDoc(doc(db, 'users', uid), { role: 'buyer', verified: false });
 }
 
 // ─── Payments ────────────────────────────────────────────
