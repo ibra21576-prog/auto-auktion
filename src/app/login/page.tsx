@@ -52,8 +52,10 @@ export default function LoginPage() {
       // After sign in, emailVerified state will update via onAuthStateChanged
       // The useEffect above handles the redirect
     } catch (err: unknown) {
+      console.error('[Login] Firebase error:', err);
       const code = (err as { code?: string }).code || '';
-      setError(firebaseErrorMessage(code));
+      const msg = (err as { message?: string }).message || '';
+      setError(code ? firebaseErrorMessage(code) : (msg || 'Anmeldung fehlgeschlagen.'));
       setLoading(false);
     }
   }
@@ -65,8 +67,10 @@ export default function LoginPage() {
       await signInWithGoogle('buyer');
       router.replace(redirect);
     } catch (err: unknown) {
+      console.error('[Login/Google] Firebase error:', err);
       const code = (err as { code?: string }).code || '';
-      setError(firebaseErrorMessage(code));
+      const msg = (err as { message?: string }).message || '';
+      setError(code ? firebaseErrorMessage(code) : (msg || 'Google-Anmeldung fehlgeschlagen.'));
     } finally {
       setGoogleLoading(false);
     }

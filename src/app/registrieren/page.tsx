@@ -63,8 +63,10 @@ export default function RegisterPage() {
       // Always go to email verification page first
       router.replace('/verifizierung');
     } catch (err: unknown) {
+      console.error('[Register] Firebase error:', err);
       const code = (err as { code?: string }).code || '';
-      setError(firebaseErrorMessage(code));
+      const msg = (err as { message?: string }).message || '';
+      setError(code ? firebaseErrorMessage(code) : (msg || 'Registrierung fehlgeschlagen.'));
     } finally {
       setLoading(false);
     }

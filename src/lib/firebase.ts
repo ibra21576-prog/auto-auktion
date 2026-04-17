@@ -12,6 +12,19 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '1:000000000000:web:0000000000000000000000',
 };
 
+export const firebaseConfigured =
+  !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
+  !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID &&
+  process.env.NEXT_PUBLIC_FIREBASE_API_KEY !== 'demo-key';
+
+if (typeof window !== 'undefined' && !firebaseConfigured) {
+  console.error(
+    '[Firebase] Umgebungsvariablen NICHT gesetzt. ' +
+    'Die Seite kann nicht mit Firebase kommunizieren. ' +
+    'Auf Render → Environment → NEXT_PUBLIC_FIREBASE_* Variablen eintragen.'
+  );
+}
+
 const app: FirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
 export const auth = getAuth(app);
