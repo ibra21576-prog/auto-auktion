@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { FiMail, FiLock, FiZap, FiLoader } from 'react-icons/fi';
+import { FiMail, FiLock, FiZap, FiLoader, FiAlertCircle } from 'react-icons/fi';
 import { useAuth } from '@/context/AuthContext';
 
 function firebaseErrorMessage(code: string): string {
@@ -26,31 +26,34 @@ function firebaseErrorMessage(code: string): string {
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, signIn, signInWithGoogle } = useAuth();
+  const { user, emailVerified, signIn, signInWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showVerifyHint, setShowVerifyHint] = useState(false);
 
   const redirect = searchParams.get('redirect') || '/';
 
-  // If already logged in, redirect immediately
+  // If already logged in and verified, redirect immediately
   useEffect(() => {
-    if (user) router.replace(redirect);
-  }, [user, redirect, router]);
+    if (user && emailVerified) router.replace(redirect);
+    if (user && !emailVerified) setShowVerifyHint(true);
+  }, [user, emailVerified, redirect, router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setShowVerifyHint(false);
     try {
       await signIn(email, password);
-      router.replace(redirect);
+      // After sign in, emailVerified state will update via onAuthStateChanged
+      // The useEffect above handles the redirect
     } catch (err: unknown) {
       const code = (err as { code?: string }).code || '';
       setError(firebaseErrorMessage(code));
-    } finally {
       setLoading(false);
     }
   }
@@ -116,6 +119,19 @@ export default function LoginPage() {
               />
             </div>
           </div>
+
+          {showVerifyHint && (
+            <div className="bg-accent/10 border border-accent/20 rounded-lg px-3 py-2 flex items-start gap-2">
+              <FiAlertCircle className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs text-accent font-semibold">E-Mail noch nicht bestätigt</p>
+                <p className="text-xs text-muted mt-0.5">
+                  Bitte bestätige deine E-Mail-Adresse.{' '}
+                  <Link href="/verifizierung" className="text-accent underline">Zur Bestätigung →</Link>
+                </p>
+              </div>
+            </div>
+          )}
 
           {error && (
             <p className="text-danger text-xs bg-danger/10 border border-danger/20 rounded-lg px-3 py-2">{error}</p>

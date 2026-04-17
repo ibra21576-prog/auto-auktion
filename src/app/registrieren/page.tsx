@@ -60,7 +60,8 @@ export default function RegisterPage() {
     setError('');
     try {
       await signUp(form.email, form.password, form.name, role, form.companyName || undefined);
-      router.replace(role === 'dealer' ? '/dashboard/haendler' : '/');
+      // Always go to email verification page first
+      router.replace('/verifizierung');
     } catch (err: unknown) {
       const code = (err as { code?: string }).code || '';
       setError(firebaseErrorMessage(code));

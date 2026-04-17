@@ -9,6 +9,8 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   updateProfile,
+  sendEmailVerification,
+  reload,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
@@ -16,28 +18,32 @@ import { User, UserRole } from '@/types';
 
 interface AuthContextType {
   user: User | null;
+  emailVerified: boolean;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name: string, role: UserRole, companyName?: string) => Promise<void>;
   signInWithGoogle: (role?: UserRole) => Promise<void>;
   signOut: () => Promise<void>;
   updateUser: (data: Partial<User>) => Promise<void>;
+  resendVerificationEmail: () => Promise<void>;
+  reloadEmailVerified: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [emailVerified, setEmailVerified] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        setEmailVerified(firebaseUser.emailVerified);
         const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
         if (userDoc.exists()) {
           setUser({ uid: firebaseUser.uid, ...userDoc.data() } as User);
         } else {
-          // First time — create user doc
           const newUser: Omit<User, 'uid'> = {
             email: firebaseUser.email || '',
             displayName: firebaseUser.displayName || '',
@@ -55,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } else {
         setUser(null);
+        setEmailVerified(false);
       }
       setLoading(false);
     });
@@ -69,13 +76,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(cred.user, { displayName: name });
 
+    // Send verification email immediately after registration
+    await sendEmailVerification(cred.user);
+
     const newUser: Omit<User, 'uid'> = {
       email,
       displayName: name,
       role,
       companyName: role === 'dealer' ? companyName : undefined,
       paymentVerified: false,
-      verified: role === 'buyer', // Buyers are auto-verified, dealers need admin approval
+      verified: role === 'buyer',
       createdAt: new Date(),
     };
 
@@ -89,6 +99,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signInWithGoogle(role: UserRole = 'buyer') {
     const provider = new GoogleAuthProvider();
     const result = await signInWithPopup(auth, provider);
+
+    // Google accounts are always verified
+    setEmailVerified(true);
 
     const userDoc = await getDoc(doc(db, 'users', result.user.uid));
     if (!userDoc.exists()) {
@@ -112,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signOut() {
     await firebaseSignOut(auth);
     setUser(null);
+    setEmailVerified(false);
   }
 
   async function updateUser(data: Partial<User>) {
@@ -120,8 +134,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(prev => prev ? { ...prev, ...data } : null);
   }
 
+  async function resendVerificationEmail() {
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) throw new Error('Nicht angemeldet.');
+    await sendEmailVerification(firebaseUser);
+  }
+
+  async function reloadEmailVerified(): Promise<boolean> {
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) return false;
+    await reload(firebaseUser);
+    setEmailVerified(firebaseUser.emailVerified);
+    return firebaseUser.emailVerified;
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signInWithGoogle, signOut, updateUser }}>
+    <AuthContext.Provider value={{
+      user, emailVerified, loading,
+      signIn, signUp, signInWithGoogle, signOut,
+      updateUser, resendVerificationEmail, reloadEmailVerified,
+    }}>
       {children}
     </AuthContext.Provider>
   );
