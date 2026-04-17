@@ -3,6 +3,7 @@ import {
   doc,
   addDoc,
   updateDoc,
+  deleteDoc,
   getDoc,
   getDocs,
   query,
@@ -98,6 +99,14 @@ export async function approveAuction(id: string) {
 
 export async function rejectAuction(id: string) {
   await updateDoc(doc(db, 'auctions', id), { status: 'cancelled' });
+}
+
+export async function deleteAuction(id: string) {
+  await deleteDoc(doc(db, 'auctions', id));
+}
+
+export async function forceEndAuction(id: string) {
+  await updateDoc(doc(db, 'auctions', id), { status: 'ended' });
 }
 
 export async function endAuction(id: string, winnerId: string) {
@@ -208,6 +217,18 @@ export async function rejectDealer(uid: string) {
   await updateDoc(doc(db, 'users', uid), { role: 'buyer', verified: false });
 }
 
+export async function getAllUsers(): Promise<User[]> {
+  const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ uid: d.id, ...d.data() }) as User);
+}
+
+export async function updateUserRole(uid: string, role: User['role'], verified?: boolean) {
+  const data: Record<string, unknown> = { role };
+  if (verified !== undefined) data.verified = verified;
+  await updateDoc(doc(db, 'users', uid), data);
+}
+
 // ─── Payments ────────────────────────────────────────────
 
 export async function createPaymentRecord(record: Omit<PaymentRecord, 'id' | 'createdAt'>) {
@@ -216,6 +237,12 @@ export async function createPaymentRecord(record: Omit<PaymentRecord, 'id' | 'cr
     createdAt: serverTimestamp(),
   });
   return ref.id;
+}
+
+export async function getAllPayments(): Promise<PaymentRecord[]> {
+  const q = query(collection(db, 'payments'), orderBy('createdAt', 'desc'));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }) as PaymentRecord);
 }
 
 export async function getPaymentsByBuyer(buyerId: string) {
