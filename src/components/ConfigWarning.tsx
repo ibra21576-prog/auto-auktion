@@ -1,10 +1,13 @@
 'use client';
 
-import { firebaseConfigured } from '@/lib/firebase';
 import { FiAlertTriangle } from 'react-icons/fi';
 
 export default function ConfigWarning() {
-  if (firebaseConfigured) return null;
+  const configured =
+    !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
+    process.env.NEXT_PUBLIC_FIREBASE_API_KEY !== 'demo-key';
+
+  if (configured) return null;
 
   return (
     <div className="bg-danger/20 border-b border-danger/40 text-danger px-4 py-3">
