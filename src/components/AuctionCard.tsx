@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Auction } from '@/types';
 import CountdownTimer from './CountdownTimer';
-import { FiMapPin, FiUsers, FiClock } from 'react-icons/fi';
+import { FiMapPin, FiUsers, FiClock, FiImage } from 'react-icons/fi';
 
 interface AuctionCardProps {
   auction: Auction;
@@ -18,11 +18,18 @@ export default function AuctionCard({ auction }: AuctionCardProps) {
       <div className="bg-card-bg border border-card-border rounded-xl overflow-hidden hover:border-accent/50 transition-all duration-300 hover:shadow-lg hover:shadow-accent/5">
         {/* Image */}
         <div className="relative aspect-[16/10] overflow-hidden bg-input-bg">
-          <img
-            src={car.images[0]}
-            alt={car.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-          />
+          {car.images && car.images.length > 0 ? (
+            <img
+              src={car.images[0]}
+              alt={car.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            />
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-muted">
+              <FiImage className="w-8 h-8" />
+              <p className="text-xs">Kein Foto</p>
+            </div>
+          )}
           {/* Status Badge */}
           <div className="absolute top-3 left-3">
             {status === 'active' ? (

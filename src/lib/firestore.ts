@@ -13,6 +13,7 @@ import {
   serverTimestamp,
   Timestamp,
   limit,
+  increment,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Auction, Bid, ChatMessage, PaymentRecord } from '@/types';
@@ -114,7 +115,7 @@ export async function placeBid(auctionId: string, bid: Omit<Bid, 'id'>) {
     currentBid: bid.amount,
     highestBidderId: bid.userId,
     highestBidderName: bid.userName,
-    bidCount: bid.amount, // Will use increment in production
+    bidCount: increment(1),
   });
 
   return bidRef.id;
