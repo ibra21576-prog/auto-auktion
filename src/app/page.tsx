@@ -1,17 +1,28 @@
 'use client';
 
-import { useState } from 'react';
-import { mockAuctions } from '@/lib/mock-data';
+import { useState, useEffect } from 'react';
+import { onActiveAuctions } from '@/lib/firestore';
+import { Auction } from '@/types';
 import AuctionCard from '@/components/AuctionCard';
-import { FiSearch, FiFilter, FiZap, FiClock } from 'react-icons/fi';
+import { FiSearch, FiFilter, FiZap, FiClock, FiLoader } from 'react-icons/fi';
 
 type FilterType = 'all' | 'active' | 'upcoming';
 
 export default function Home() {
+  const [auctions, setAuctions] = useState<Auction[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
 
-  const filtered = mockAuctions.filter((a) => {
+  useEffect(() => {
+    const unsubscribe = onActiveAuctions((data) => {
+      setAuctions(data);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const filtered = auctions.filter((a) => {
     const matchesSearch =
       a.car.title.toLowerCase().includes(search.toLowerCase()) ||
       a.car.make.toLowerCase().includes(search.toLowerCase()) ||
@@ -20,8 +31,8 @@ export default function Home() {
     return matchesSearch && matchesFilter;
   });
 
-  const activeCount = mockAuctions.filter(a => a.status === 'active').length;
-  const totalBids = mockAuctions.reduce((sum, a) => sum + a.bidCount, 0);
+  const activeCount = auctions.filter(a => a.status === 'active').length;
+  const totalBids = auctions.reduce((sum, a) => sum + (a.bidCount || 0), 0);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -29,7 +40,7 @@ export default function Home() {
       <div className="text-center mb-10">
         <div className="inline-flex items-center gap-2 bg-accent/10 border border-accent/20 text-accent text-sm font-medium px-4 py-1.5 rounded-full mb-4">
           <span className="w-2 h-2 bg-accent rounded-full animate-pulse" />
-          {activeCount} Live Auktionen
+          {loading ? '...' : `${activeCount} Live Auktionen`}
         </div>
         <h1 className="text-3xl sm:text-5xl font-bold tracking-tight mb-3">
           Premium Auto-Auktionen
@@ -52,7 +63,7 @@ export default function Home() {
           <p className="text-xs text-muted">Gebote</p>
         </div>
         <div className="text-center">
-          <p className="text-2xl font-bold text-foreground">{mockAuctions.length}</p>
+          <p className="text-2xl font-bold text-foreground">{auctions.length}</p>
           <p className="text-xs text-muted">Fahrzeuge</p>
         </div>
       </div>
@@ -92,11 +103,26 @@ export default function Home() {
       </div>
 
       {/* Auction Grid */}
-      {filtered.length > 0 ? (
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-24 gap-4">
+          <FiLoader className="w-8 h-8 text-accent animate-spin" />
+          <p className="text-muted text-sm">Auktionen werden geladen...</p>
+        </div>
+      ) : filtered.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((auction) => (
             <AuctionCard key={auction.id} auction={auction} />
           ))}
+        </div>
+      ) : auctions.length === 0 ? (
+        <div className="text-center py-24">
+          <div className="w-20 h-20 rounded-full bg-card-bg border border-card-border flex items-center justify-center mx-auto mb-6">
+            <FiZap className="w-8 h-8 text-muted" />
+          </div>
+          <p className="text-lg font-semibold mb-2">Noch keine Auktionen</p>
+          <p className="text-sm text-muted max-w-xs mx-auto">
+            Aktuell sind keine Fahrzeuge gelistet. Schauen Sie bald wieder vorbei oder stellen Sie selbst ein Fahrzeug ein.
+          </p>
         </div>
       ) : (
         <div className="text-center py-20">

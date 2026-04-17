@@ -3,11 +3,28 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FiMail, FiLock, FiUser, FiZap, FiBriefcase, FiPhone } from 'react-icons/fi';
+import { FiMail, FiLock, FiUser, FiZap, FiBriefcase, FiPhone, FiLoader } from 'react-icons/fi';
+import { useAuth } from '@/context/AuthContext';
 import { UserRole } from '@/types';
+
+function firebaseErrorMessage(code: string): string {
+  switch (code) {
+    case 'auth/email-already-in-use':
+      return 'Diese E-Mail-Adresse ist bereits registriert.';
+    case 'auth/invalid-email':
+      return 'Ungültige E-Mail-Adresse.';
+    case 'auth/weak-password':
+      return 'Passwort zu schwach. Mindestens 6 Zeichen verwenden.';
+    case 'auth/network-request-failed':
+      return 'Netzwerkfehler. Bitte Verbindung prüfen.';
+    default:
+      return 'Registrierung fehlgeschlagen. Bitte erneut versuchen.';
+  }
+}
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { signUp } = useAuth();
   const [role, setRole] = useState<UserRole>('buyer');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -35,18 +52,21 @@ export default function RegisterPage() {
       setError('Passwort muss mindestens 6 Zeichen haben.');
       return;
     }
+    if (role === 'dealer' && !form.companyName.trim()) {
+      setError('Firmenname ist erforderlich.');
+      return;
+    }
     setLoading(true);
+    setError('');
     try {
-      // In production: call signUp from AuthContext
-      // await signUp(form.email, form.password, form.name, role, form.companyName);
-      await new Promise(r => setTimeout(r, 800)); // simulate
-      if (role === 'dealer') {
-        router.push('/dashboard/haendler');
-      } else {
-        router.push('/');
-      }
+      await signUp(form.email, form.password, form.name, role, form.companyName || undefined);
+      // Always go to email verification page first
+      router.replace('/verifizierung');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Registrierung fehlgeschlagen.');
+      console.error('[Register] Firebase error:', err);
+      const code = (err as { code?: string }).code || '';
+      const msg = (err as { message?: string }).message || '';
+      setError(code ? firebaseErrorMessage(code) : (msg || 'Registrierung fehlgeschlagen.'));
     } finally {
       setLoading(false);
     }
@@ -93,6 +113,7 @@ export default function RegisterPage() {
             <div className="relative">
               <FiUser className="absolute left-3 top-1/2 -translate-y-1/2 text-muted w-4 h-4" />
               <input name="name" type="text" value={form.name} onChange={handleChange} required
+                autoComplete="name"
                 placeholder="Ihr vollständiger Name"
                 className="w-full bg-input-bg border border-card-border rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:border-accent transition-colors" />
             </div>
@@ -110,10 +131,10 @@ export default function RegisterPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-xs text-muted mb-1.5">Telefon *</label>
+                <label className="block text-xs text-muted mb-1.5">Telefon</label>
                 <div className="relative">
                   <FiPhone className="absolute left-3 top-1/2 -translate-y-1/2 text-muted w-4 h-4" />
-                  <input name="phone" type="tel" value={form.phone} onChange={handleChange} required
+                  <input name="phone" type="tel" value={form.phone} onChange={handleChange}
                     placeholder="+49 89 123456"
                     className="w-full bg-input-bg border border-card-border rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:border-accent transition-colors" />
                 </div>
@@ -126,6 +147,7 @@ export default function RegisterPage() {
             <div className="relative">
               <FiMail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted w-4 h-4" />
               <input name="email" type="email" value={form.email} onChange={handleChange} required
+                autoComplete="email"
                 placeholder="ihre@email.de"
                 className="w-full bg-input-bg border border-card-border rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:border-accent transition-colors" />
             </div>
@@ -136,6 +158,7 @@ export default function RegisterPage() {
             <div className="relative">
               <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted w-4 h-4" />
               <input name="password" type="password" value={form.password} onChange={handleChange} required minLength={6}
+                autoComplete="new-password"
                 placeholder="Mindestens 6 Zeichen"
                 className="w-full bg-input-bg border border-card-border rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:border-accent transition-colors" />
             </div>
@@ -146,12 +169,15 @@ export default function RegisterPage() {
             <div className="relative">
               <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted w-4 h-4" />
               <input name="confirmPassword" type="password" value={form.confirmPassword} onChange={handleChange} required
+                autoComplete="new-password"
                 placeholder="Passwort wiederholen"
                 className="w-full bg-input-bg border border-card-border rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:border-accent transition-colors" />
             </div>
           </div>
 
-          {error && <p className="text-danger text-xs bg-danger/10 border border-danger/20 rounded-lg px-3 py-2">{error}</p>}
+          {error && (
+            <p className="text-danger text-xs bg-danger/10 border border-danger/20 rounded-lg px-3 py-2">{error}</p>
+          )}
 
           {role === 'dealer' && (
             <div className="bg-accent/10 border border-accent/20 rounded-lg p-3">
@@ -161,8 +187,11 @@ export default function RegisterPage() {
           )}
 
           <button type="submit" disabled={loading}
-            className="w-full bg-accent hover:bg-accent-hover disabled:opacity-50 text-black font-bold py-2.5 rounded-lg transition-colors text-sm">
-            {loading ? 'Wird erstellt...' : 'Konto erstellen'}
+            className="w-full bg-accent hover:bg-accent-hover disabled:opacity-50 text-black font-bold py-2.5 rounded-lg transition-colors text-sm flex items-center justify-center gap-2">
+            {loading
+              ? <><FiLoader className="w-4 h-4 animate-spin" /> Wird erstellt…</>
+              : 'Konto erstellen'
+            }
           </button>
         </form>
 

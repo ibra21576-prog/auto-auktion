@@ -1,37 +1,69 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { FiCreditCard, FiUser, FiCheckCircle, FiAlertCircle, FiShield, FiPackage } from 'react-icons/fi';
-
-// Mock user – in production from useAuth()
-const mockUser = {
-  displayName: 'Max Mustermann',
-  email: 'max@example.de',
-  role: 'buyer' as const,
-  paymentVerified: false,
-  verified: true,
-};
-
-const mockWonAuctions = [
-  { id: '3', title: '2020 Mercedes-AMG GT 63 S', amount: 112000, fee: 250, status: 'pending', date: new Date(Date.now() - 3600000) },
-];
+import { useAuth } from '@/context/AuthContext';
+import { getPaymentsByBuyer } from '@/lib/firestore';
+import { PaymentRecord } from '@/types';
+import {
+  FiCreditCard, FiUser, FiCheckCircle, FiAlertCircle,
+  FiShield, FiPackage, FiLoader, FiLock,
+} from 'react-icons/fi';
 
 export default function KontoPage() {
+  const { user, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'profil' | 'zahlung' | 'kaeufe'>('profil');
-  const user = mockUser;
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    if (tab === 'zahlung') setActiveTab('zahlung');
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'kaeufe' && user) {
+      setPaymentsLoading(true);
+      getPaymentsByBuyer(user.uid).then(data => {
+        setPayments(data);
+        setPaymentsLoading(false);
+      });
+    }
+  }, [activeTab, user]);
+
+  if (authLoading) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-24 flex justify-center">
+        <FiLoader className="w-8 h-8 text-accent animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-20 text-center">
+        <FiLock className="w-12 h-12 text-muted mx-auto mb-4" />
+        <h2 className="text-xl font-bold mb-2">Nicht angemeldet</h2>
+        <p className="text-muted text-sm mb-4">Bitte melden Sie sich an, um Ihr Konto zu verwalten.</p>
+        <Link href="/login" className="text-accent hover:underline text-sm">Zum Login →</Link>
+      </div>
+    );
+  }
+
+  const roleLabel = user.role === 'buyer' ? 'Käufer' : user.role === 'dealer' ? 'Händler' : 'Admin';
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+      {/* Profile Header */}
       <div className="flex items-center gap-4 mb-8">
         <div className="w-14 h-14 rounded-full bg-accent/20 flex items-center justify-center text-2xl font-bold text-accent">
-          {user.displayName.charAt(0)}
+          {(user.displayName || user.email).charAt(0).toUpperCase()}
         </div>
         <div>
-          <h1 className="text-xl font-bold">{user.displayName}</h1>
+          <h1 className="text-xl font-bold">{user.displayName || user.email}</h1>
           <p className="text-sm text-muted">{user.email}</p>
           <span className="text-xs bg-card-border text-muted px-2 py-0.5 rounded-full mt-1 inline-block">
-            {user.role === 'buyer' ? 'Käufer' : user.role === 'dealer' ? 'Händler' : 'Admin'}
+            {roleLabel}
           </span>
         </div>
       </div>
@@ -39,14 +71,17 @@ export default function KontoPage() {
       {/* Tabs */}
       <div className="flex gap-1 bg-card-bg border border-card-border rounded-xl p-1 mb-6 w-fit">
         {[
-          { key: 'profil',  label: 'Profil',         icon: FiUser       },
-          { key: 'zahlung', label: 'Zahlung',         icon: FiCreditCard },
-          { key: 'kaeufe',  label: 'Meine Käufe',    icon: FiPackage    },
+          { key: 'profil',  label: 'Profil',      icon: FiUser       },
+          { key: 'zahlung', label: 'Zahlung',      icon: FiCreditCard },
+          { key: 'kaeufe',  label: 'Meine Käufe', icon: FiPackage    },
         ].map(tab => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key as typeof activeTab)}
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key as typeof activeTab)}
             className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium transition-all ${
               activeTab === tab.key ? 'bg-accent text-black' : 'text-muted hover:text-foreground'
-            }`}>
+            }`}
+          >
             <tab.icon className="w-3.5 h-3.5" />
             {tab.label}
           </button>
@@ -59,8 +94,10 @@ export default function KontoPage() {
           <h2 className="font-semibold text-sm">Profilinformationen</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
-              { label: 'Name', value: user.displayName },
+              { label: 'Name',   value: user.displayName || '–' },
               { label: 'E-Mail', value: user.email },
+              ...(user.companyName ? [{ label: 'Unternehmen', value: user.companyName }] : []),
+              ...(user.phone      ? [{ label: 'Telefon',     value: user.phone      }] : []),
             ].map(f => (
               <div key={f.label}>
                 <p className="text-xs text-muted mb-1">{f.label}</p>
@@ -68,11 +105,17 @@ export default function KontoPage() {
               </div>
             ))}
           </div>
-          <div className="pt-4 border-t border-card-border">
+          <div className="pt-4 border-t border-card-border space-y-2">
             <div className="flex items-center gap-2">
               {user.verified
                 ? <><FiCheckCircle className="w-4 h-4 text-success" /><span className="text-xs text-success font-medium">Konto verifiziert</span></>
-                : <><FiAlertCircle className="w-4 h-4 text-accent" /><span className="text-xs text-accent font-medium">E-Mail-Verifizierung ausstehend</span></>
+                : <><FiAlertCircle className="w-4 h-4 text-accent" /><span className="text-xs text-accent font-medium">Verifizierung ausstehend</span></>
+              }
+            </div>
+            <div className="flex items-center gap-2">
+              {user.paymentVerified
+                ? <><FiCheckCircle className="w-4 h-4 text-success" /><span className="text-xs text-success font-medium">Zahlungsmethode hinterlegt</span></>
+                : <><FiAlertCircle className="w-4 h-4 text-muted" /><span className="text-xs text-muted">Keine Zahlungsmethode hinterlegt</span></>
               }
             </div>
           </div>
@@ -100,7 +143,7 @@ export default function KontoPage() {
                   <FiCreditCard className="w-4 h-4 text-accent" />
                   Zahlungsmethode hinzufügen
                 </p>
-                {/* Stripe Elements would mount here */}
+                {/* Stripe Elements would be mounted here in production */}
                 <div className="space-y-3">
                   <div className="bg-card-bg border border-card-border rounded-lg px-3 py-3">
                     <p className="text-xs text-muted">Kartennummer</p>
@@ -145,8 +188,8 @@ export default function KontoPage() {
                     <FiCreditCard className="w-5 h-5 text-success" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold">Visa •••• 4242</p>
-                    <p className="text-xs text-muted">Läuft ab: 12/2027</p>
+                    <p className="text-sm font-semibold">Zahlungsmethode hinterlegt</p>
+                    <p className="text-xs text-muted">Wird nur bei Gewinn einer Auktion belastet</p>
                   </div>
                 </div>
                 <span className="text-xs text-success font-semibold flex items-center gap-1">
@@ -164,32 +207,39 @@ export default function KontoPage() {
           <div className="px-5 py-4 border-b border-card-border">
             <h2 className="font-semibold text-sm">Gewonnene Auktionen</h2>
           </div>
-          {mockWonAuctions.length === 0 ? (
-            <div className="py-12 text-center text-muted text-sm">Noch keine Käufe.</div>
+          {paymentsLoading ? (
+            <div className="py-12 flex justify-center">
+              <FiLoader className="w-6 h-6 text-accent animate-spin" />
+            </div>
+          ) : payments.length === 0 ? (
+            <div className="py-12 text-center">
+              <FiPackage className="w-10 h-10 text-muted mx-auto mb-3" />
+              <p className="text-sm text-muted">Noch keine Käufe.</p>
+              <Link href="/" className="text-accent text-sm hover:underline mt-1 inline-block">
+                Jetzt bieten →
+              </Link>
+            </div>
           ) : (
             <div className="divide-y divide-card-border">
-              {mockWonAuctions.map(a => (
-                <div key={a.id} className="px-5 py-4">
+              {payments.map(p => (
+                <div key={p.id} className="px-5 py-4">
                   <div className="flex items-center justify-between mb-2">
-                    <Link href={`/auktion/${a.id}`} className="text-sm font-medium hover:text-accent transition-colors">
-                      {a.title}
+                    <Link href={`/auktion/${p.auctionId}`} className="text-sm font-medium hover:text-accent transition-colors">
+                      Auktion #{p.auctionId.slice(0, 8)}
                     </Link>
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                      a.status === 'pending' ? 'bg-accent/20 text-accent' : 'bg-success/20 text-success'
+                      p.status === 'succeeded' ? 'bg-success/20 text-success'
+                      : p.status === 'failed'  ? 'bg-danger/20 text-danger'
+                      : 'bg-accent/20 text-accent'
                     }`}>
-                      {a.status === 'pending' ? 'Zahlung ausstehend' : 'Bezahlt'}
+                      {p.status === 'succeeded' ? 'Bezahlt' : p.status === 'failed' ? 'Fehlgeschlagen' : 'Ausstehend'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-muted">
-                    <span>Zuschlag: <span className="text-foreground font-mono">{a.amount.toLocaleString('de-DE')} €</span></span>
-                    <span>Gebühr: <span className="text-foreground font-mono">{a.fee} €</span></span>
-                    <span>Gesamt: <span className="text-accent font-mono font-semibold">{(a.amount + a.fee).toLocaleString('de-DE')} €</span></span>
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-muted">
+                    <span>Zuschlag: <span className="text-foreground font-mono">{p.bidAmount?.toLocaleString('de-DE')} €</span></span>
+                    <span>Gebühr: <span className="text-foreground font-mono">{p.buyerFee} €</span></span>
+                    <span>Gesamt: <span className="text-accent font-mono font-semibold">{p.totalAmount?.toLocaleString('de-DE')} €</span></span>
                   </div>
-                  {a.status === 'pending' && (
-                    <button className="mt-3 w-full bg-accent hover:bg-accent-hover text-black font-bold py-2 rounded-lg text-sm transition-colors">
-                      Jetzt bezahlen – {(a.amount + a.fee).toLocaleString('de-DE')} €
-                    </button>
-                  )}
                 </div>
               ))}
             </div>

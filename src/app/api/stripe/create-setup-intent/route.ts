@@ -3,16 +3,17 @@ import Stripe from 'stripe';
 
 export const dynamic = 'force-dynamic';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2026-03-25.dahlia',
-});
+function getStripe() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('STRIPE_SECRET_KEY ist nicht konfiguriert.');
+  return new Stripe(key, { apiVersion: '2026-03-25.dahlia' });
+}
 
-// Creates a SetupIntent so users can save their payment method before bidding
 export async function POST(req: NextRequest) {
   try {
     const { email, name, userId } = await req.json();
+    const stripe = getStripe();
 
-    // Create or retrieve Stripe customer
     const customers = await stripe.customers.list({ email, limit: 1 });
     let customer: Stripe.Customer;
 
@@ -26,7 +27,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Create SetupIntent to save payment method
     const setupIntent = await stripe.setupIntents.create({
       customer: customer.id,
       payment_method_types: ['card', 'sepa_debit'],

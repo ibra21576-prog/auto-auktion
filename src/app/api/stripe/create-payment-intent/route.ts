@@ -3,21 +3,23 @@ import Stripe from 'stripe';
 
 export const dynamic = 'force-dynamic';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2026-03-25.dahlia',
-});
-
 const BUYER_FEE = parseInt(process.env.NEXT_PUBLIC_BUYER_FEE || '250');
 
-// Charges the auction winner: bid amount + buyer fee (250€)
+function getStripe() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('STRIPE_SECRET_KEY ist nicht konfiguriert.');
+  return new Stripe(key, { apiVersion: '2026-03-25.dahlia' });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { auctionId, customerId, paymentMethodId, bidAmount, buyerName } = await req.json();
+    const stripe = getStripe();
 
     const totalAmount = bidAmount + BUYER_FEE;
 
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: totalAmount * 100, // Stripe uses cents
+      amount: totalAmount * 100,
       currency: 'eur',
       customer: customerId,
       payment_method: paymentMethodId,

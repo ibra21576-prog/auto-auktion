@@ -1,0 +1,105 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helpers ───────────────────────────────────────────────
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isOwn(uid) {
+      return isAuth() && request.auth.uid == uid;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuth() && getUserData().role == 'admin';
+    }
+
+    function isDealer() {
+      return isAuth() && getUserData().role in ['dealer', 'admin'];
+    }
+
+    function bootstrapped() {
+      return exists(/databases/$(database)/documents/settings/adminBootstrapped);
+    }
+
+    // ─── Settings (bootstrap flag) ─────────────────────────────
+    match /settings/{docId} {
+      allow read: if true;
+      // Only allow writing the bootstrap flag once (when it doesn't exist yet)
+      allow write: if isAuth() && docId == 'adminBootstrapped' && !bootstrapped();
+    }
+
+    // ─── Users ─────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read: if isOwn(userId) || isAdmin();
+
+      // Allow new user doc creation on registration
+      allow create: if isOwn(userId);
+
+      // Own profile updates: cannot self-promote to admin/dealer after bootstrap
+      allow update: if isOwn(userId) && (
+        // No role change attempted
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'verified']))
+        ||
+        // First-time admin bootstrap (only allowed before bootstrap flag exists)
+        (request.resource.data.role == 'admin' && !bootstrapped())
+      );
+
+      // Admins can update any user (role changes, verification etc.)
+      allow update: if isAdmin();
+
+      allow delete: if isAdmin();
+    }
+
+    // ─── Auctions ──────────────────────────────────────────────
+    match /auctions/{auctionId} {
+      // Public read — anyone can browse auctions
+      allow read: if true;
+
+      // Only dealers and admins can create auctions
+      allow create: if isDealer();
+
+      // Seller can update their own auction, admin can update any
+      allow update: if isAuth() && (
+        resource.data.sellerId == request.auth.uid || isAdmin()
+      );
+
+      // Only admin can delete auctions
+      allow delete: if isAdmin();
+
+      // ── Bids subcollection ─────────────────────────────────
+      match /bids/{bidId} {
+        allow read: if true;
+        // Any authenticated user can place a bid
+        allow create: if isAuth();
+        allow update: if false;
+        allow delete: if false;
+      }
+
+      // ── Chat subcollection ─────────────────────────────────
+      match /chat/{messageId} {
+        allow read: if true;
+        allow create: if isAuth();
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+    }
+
+    // ─── Payments ──────────────────────────────────────────────
+    match /payments/{paymentId} {
+      // Buyer, seller, or admin can read a payment record
+      allow read: if isAuth() && (
+        resource.data.buyerId == request.auth.uid ||
+        resource.data.sellerId == request.auth.uid ||
+        isAdmin()
+      );
+      // Payments are created/updated only by admin (server-side via API routes)
+      allow write: if isAdmin();
+    }
+  }
+}
