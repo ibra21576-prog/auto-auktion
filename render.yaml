@@ -10,17 +10,17 @@ services:
       - key: PORT
         value: 3000
       - key: NEXT_PUBLIC_FIREBASE_API_KEY
-        sync: false
+        value: "AIzaSyC2P0o_VUtfFy2qQDMuyZmvwXMOT0KNZ-I"
       - key: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-        sync: false
+        value: "autobid-5e23d.firebaseapp.com"
       - key: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-        sync: false
+        value: "autobid-5e23d"
       - key: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-        sync: false
+        value: "autobid-5e23d.firebasestorage.app"
       - key: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-        sync: false
+        value: "901745420058"
       - key: NEXT_PUBLIC_FIREBASE_APP_ID
-        sync: false
+        value: "1:901745420058:web:c396c3849776cee54e6ea3"
       - key: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
         sync: false
       - key: STRIPE_SECRET_KEY
