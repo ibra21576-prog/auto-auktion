@@ -76,8 +76,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(cred.user, { displayName: name });
 
-    // Send verification email immediately after registration
-    await sendEmailVerification(cred.user);
+    // Send verification email — non-critical, don't block registration if it fails
+    try {
+      await sendEmailVerification(cred.user);
+    } catch (e) {
+      console.warn('[signUp] Verification email failed (non-critical):', e);
+    }
 
     const newUser: Omit<User, 'uid'> = {
       email,
