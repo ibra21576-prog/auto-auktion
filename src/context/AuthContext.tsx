@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email,
       displayName: name,
       role,
-      companyName: role === 'dealer' ? companyName : undefined,
+      ...(role === 'dealer' && companyName ? { companyName } : {}),
       paymentVerified: false,
       verified: role === 'buyer',
       createdAt: new Date(),
