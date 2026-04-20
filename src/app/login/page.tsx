@@ -62,6 +62,7 @@ function LoginForm() {
       const friendly = firebaseErrorMessage(code);
       const detail = [code, msg].filter(Boolean).join(' — ');
       setError(friendly || detail || 'Unbekannter Fehler.');
+    } finally {
       setLoading(false);
     }
   }
