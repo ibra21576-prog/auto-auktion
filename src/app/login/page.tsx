@@ -18,8 +18,15 @@ function firebaseErrorMessage(code: string): string {
       return 'Dieses Konto wurde deaktiviert.';
     case 'auth/network-request-failed':
       return 'Netzwerkfehler. Bitte Verbindung prüfen.';
+    case 'auth/operation-not-allowed':
+      return 'E-Mail/Passwort-Login ist in Firebase nicht aktiviert.';
+    case 'auth/api-key-not-valid':
+    case 'auth/invalid-api-key':
+      return 'Firebase API-Key ist ungültig.';
+    case 'auth/unauthorized-domain':
+      return 'Diese Domain ist in Firebase nicht autorisiert.';
     default:
-      return 'Anmeldung fehlgeschlagen. Bitte erneut versuchen.';
+      return '';
   }
 }
 
@@ -52,7 +59,9 @@ function LoginForm() {
       console.error('[Login] Firebase error:', err);
       const code = (err as { code?: string }).code || '';
       const msg = (err as { message?: string }).message || '';
-      setError(code ? firebaseErrorMessage(code) : (msg || 'Anmeldung fehlgeschlagen.'));
+      const friendly = firebaseErrorMessage(code);
+      const detail = [code, msg].filter(Boolean).join(' — ');
+      setError(friendly || detail || 'Unbekannter Fehler.');
       setLoading(false);
     }
   }
@@ -67,7 +76,9 @@ function LoginForm() {
       console.error('[Login/Google] Firebase error:', err);
       const code = (err as { code?: string }).code || '';
       const msg = (err as { message?: string }).message || '';
-      setError(code ? firebaseErrorMessage(code) : (msg || 'Google-Anmeldung fehlgeschlagen.'));
+      const friendly = firebaseErrorMessage(code);
+      const detail = [code, msg].filter(Boolean).join(' — ');
+      setError(friendly || detail || 'Google-Anmeldung fehlgeschlagen.');
     } finally {
       setGoogleLoading(false);
     }
