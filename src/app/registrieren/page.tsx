@@ -17,8 +17,17 @@ function firebaseErrorMessage(code: string): string {
       return 'Passwort zu schwach. Mindestens 6 Zeichen verwenden.';
     case 'auth/network-request-failed':
       return 'Netzwerkfehler. Bitte Verbindung prüfen.';
+    case 'auth/operation-not-allowed':
+      return 'E-Mail/Passwort-Login ist in Firebase nicht aktiviert. Firebase Console → Authentication → Sign-in method → Email/Password aktivieren.';
+    case 'auth/api-key-not-valid':
+    case 'auth/invalid-api-key':
+      return 'Firebase API-Key ist ungültig. Bitte Administrator kontaktieren.';
+    case 'auth/unauthorized-domain':
+      return 'Diese Domain ist in Firebase nicht autorisiert. Firebase Console → Authentication → Settings → Authorized domains → autobid-ipc6.onrender.com hinzufügen.';
+    case 'permission-denied':
+      return 'Firestore-Rechte fehlen. Firestore-Rules erlauben keinen Schreibzugriff auf /users.';
     default:
-      return 'Registrierung fehlgeschlagen. Bitte erneut versuchen.';
+      return '';
   }
 }
 
@@ -66,7 +75,10 @@ export default function RegisterPage() {
       console.error('[Register] Firebase error:', err);
       const code = (err as { code?: string }).code || '';
       const msg = (err as { message?: string }).message || '';
-      setError(code ? firebaseErrorMessage(code) : (msg || 'Registrierung fehlgeschlagen.'));
+      const friendly = firebaseErrorMessage(code);
+      // Show the raw firebase code/message so we can diagnose without DevTools
+      const detail = [code, msg].filter(Boolean).join(' — ');
+      setError(friendly || detail || 'Unbekannter Fehler.');
     } finally {
       setLoading(false);
     }
