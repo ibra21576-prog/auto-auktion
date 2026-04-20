@@ -1,13 +1,26 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
-import { FiMenu, FiX, FiZap, FiPlus, FiUser, FiLogOut, FiGrid, FiShield } from 'react-icons/fi';
+import { useEffect, useState } from 'react';
+import { FiMenu, FiX, FiZap, FiPlus, FiUser, FiLogOut, FiGrid, FiShield, FiInbox } from 'react-icons/fi';
 import { useAuth } from '@/context/AuthContext';
+import { onMyConversations } from '@/lib/firestore';
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { user, signOut } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) {
+      setUnreadCount(0);
+      return;
+    }
+    const unsub = onMyConversations(user.uid, (data) => {
+      setUnreadCount(data.filter(c => c.unreadFor?.includes(user.uid)).length);
+    });
+    return () => unsub();
+  }, [user]);
 
   return (
     <nav className="sticky top-0 z-50 bg-card-bg/80 backdrop-blur-xl border-b border-card-border">
@@ -48,6 +61,19 @@ export default function Navbar() {
                     Admin
                   </Link>
                 )}
+                <Link
+                  href="/postfach"
+                  className="relative flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors"
+                  title="Postfach"
+                >
+                  <FiInbox className="w-4 h-4" />
+                  Postfach
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] bg-accent text-black text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </Link>
                 {(user.role === 'dealer' || user.role === 'admin') && (
                   <Link
                     href="/erstellen"
@@ -132,6 +158,14 @@ export default function Navbar() {
                     Admin Dashboard
                   </Link>
                 )}
+                <Link href="/postfach" className="flex items-center justify-between px-3 py-2 text-sm text-muted hover:text-foreground rounded-lg hover:bg-input-bg" onClick={() => setMenuOpen(false)}>
+                  <span>Postfach</span>
+                  {unreadCount > 0 && (
+                    <span className="min-w-[18px] h-[18px] bg-accent text-black text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </Link>
                 <Link href="/konto" className="block px-3 py-2 text-sm text-muted hover:text-foreground rounded-lg hover:bg-input-bg" onClick={() => setMenuOpen(false)}>
                   Mein Konto
                 </Link>

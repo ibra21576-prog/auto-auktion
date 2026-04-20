@@ -16,7 +16,8 @@ import {
   increment,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Auction, Bid, ChatMessage, PaymentRecord, User } from '@/types';
+import { arrayRemove, arrayUnion, setDoc } from 'firebase/firestore';
+import { Auction, Bid, ChatMessage, Conversation, DirectMessage, PaymentRecord, User } from '@/types';
 
 // ─── Timestamp normalization ──────────────────────────────
 
@@ -134,7 +135,19 @@ export function onActiveAuctions(callback: (auctions: Auction[]) => void) {
     orderBy('endTime', 'asc')
   );
   return onSnapshot(q, (snap) => {
-    callback(snap.docs.map(d => normalizeAuction(d.data(), d.id)));
+    const now = Date.now();
+    const auctions = snap.docs.map(d => normalizeAuction(d.data(), d.id));
+    // Opportunistically transition expired auctions to 'ended' in the background.
+    for (const a of auctions) {
+      if (a.status === 'active' && a.endTime && a.endTime.getTime() < now) {
+        updateDoc(doc(db, 'auctions', a.id), { status: 'ended' }).catch(() => {});
+      } else if (a.status === 'upcoming' && a.startTime && a.startTime.getTime() <= now) {
+        updateDoc(doc(db, 'auctions', a.id), { status: 'active' }).catch(() => {});
+      }
+    }
+    // Filter out any that are already past their end time from the UI.
+    const visible = auctions.filter(a => !(a.status === 'active' && a.endTime && a.endTime.getTime() < now));
+    callback(visible);
   });
 }
 
@@ -243,6 +256,123 @@ export async function getAllPayments(): Promise<PaymentRecord[]> {
   const q = query(collection(db, 'payments'), orderBy('createdAt', 'desc'));
   const snap = await getDocs(q);
   return snap.docs.map(d => ({ id: d.id, ...d.data() }) as PaymentRecord);
+}
+
+// ─── Messaging (Postfach) ────────────────────────────────
+
+function conversationIdFor(a: string, b: string, auctionId?: string): string {
+  const [x, y] = [a, b].sort();
+  return auctionId ? `${x}_${y}_${auctionId}` : `${x}_${y}`;
+}
+
+export async function startOrGetConversation(params: {
+  me: { uid: string; displayName: string };
+  other: { uid: string; displayName: string };
+  auction?: { id: string; title: string };
+}): Promise<string> {
+  const { me, other, auction } = params;
+  const id = conversationIdFor(me.uid, other.uid, auction?.id);
+  const ref = doc(db, 'conversations', id);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    const payload: Record<string, unknown> = {
+      participantIds: [me.uid, other.uid].sort(),
+      participantNames: {
+        [me.uid]: me.displayName,
+        [other.uid]: other.displayName,
+      },
+      lastMessage: '',
+      lastMessageAt: serverTimestamp(),
+      lastSenderId: '',
+      unreadFor: [],
+      createdAt: serverTimestamp(),
+    };
+    if (auction) {
+      payload.auctionId = auction.id;
+      payload.auctionTitle = auction.title;
+    }
+    await setDoc(ref, payload);
+  }
+  return id;
+}
+
+export async function sendDirectMessage(params: {
+  conversationId: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  otherId: string;
+}): Promise<void> {
+  const { conversationId, senderId, senderName, text, otherId } = params;
+  await addDoc(collection(db, 'conversations', conversationId, 'messages'), {
+    senderId,
+    senderName,
+    text,
+    createdAt: serverTimestamp(),
+  });
+  await updateDoc(doc(db, 'conversations', conversationId), {
+    lastMessage: text,
+    lastMessageAt: serverTimestamp(),
+    lastSenderId: senderId,
+    unreadFor: arrayUnion(otherId),
+  });
+}
+
+export async function markConversationRead(conversationId: string, uid: string): Promise<void> {
+  await updateDoc(doc(db, 'conversations', conversationId), {
+    unreadFor: arrayRemove(uid),
+  });
+}
+
+export function onMyConversations(uid: string, callback: (conversations: Conversation[]) => void) {
+  const q = query(
+    collection(db, 'conversations'),
+    where('participantIds', 'array-contains', uid),
+    orderBy('lastMessageAt', 'desc')
+  );
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map(d => {
+      const data = d.data();
+      return {
+        id: d.id,
+        ...data,
+        lastMessageAt: toDate(data.lastMessageAt),
+        createdAt: toDate(data.createdAt),
+      } as Conversation;
+    }));
+  });
+}
+
+export function onConversationMessages(conversationId: string, callback: (messages: DirectMessage[]) => void) {
+  const q = query(
+    collection(db, 'conversations', conversationId, 'messages'),
+    orderBy('createdAt', 'asc')
+  );
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map(d => {
+      const data = d.data();
+      return {
+        id: d.id,
+        conversationId,
+        senderId: data.senderId,
+        senderName: data.senderName,
+        text: data.text,
+        createdAt: toDate(data.createdAt),
+      } as DirectMessage;
+    }));
+  });
+}
+
+export async function getConversation(conversationId: string): Promise<Conversation | null> {
+  const snap = await getDoc(doc(db, 'conversations', conversationId));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  return {
+    id: snap.id,
+    ...data,
+    lastMessageAt: toDate(data.lastMessageAt),
+    createdAt: toDate(data.createdAt),
+  } as Conversation;
 }
 
 export async function getPaymentsByBuyer(buyerId: string) {

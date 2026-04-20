@@ -79,6 +79,28 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
+export interface Conversation {
+  id: string;
+  participantIds: string[];          // Exactly two uids, sorted
+  participantNames: Record<string, string>;
+  auctionId?: string;
+  auctionTitle?: string;
+  lastMessage: string;
+  lastMessageAt: Date;
+  lastSenderId: string;
+  unreadFor: string[];               // uids that have unread messages
+  createdAt: Date;
+}
+
+export interface DirectMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  createdAt: Date;
+}
+
 export interface PaymentRecord {
   id: string;
   auctionId: string;

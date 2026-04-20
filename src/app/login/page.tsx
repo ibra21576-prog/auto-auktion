@@ -55,6 +55,13 @@ function LoginForm() {
     setShowVerifyHint(false);
     try {
       await signIn(email, password);
+      // Explicit redirect — don't wait for onAuthStateChanged useEffect race
+      const fb = (await import('@/lib/firebase')).auth.currentUser;
+      if (fb && fb.emailVerified) {
+        router.replace(redirect);
+      } else if (fb && !fb.emailVerified) {
+        router.replace('/verifizierung');
+      }
     } catch (err: unknown) {
       console.error('[Login] Firebase error:', err);
       const code = (err as { code?: string }).code || '';

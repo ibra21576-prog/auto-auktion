@@ -1,7 +1,9 @@
 'use client';
 
 import { use, useState, useEffect } from 'react';
-import { onAuctionUpdate } from '@/lib/firestore';
+import { useRouter } from 'next/navigation';
+import { onAuctionUpdate, startOrGetConversation } from '@/lib/firestore';
+import { useAuth } from '@/context/AuthContext';
 import { Auction } from '@/types';
 import CountdownTimer from '@/components/CountdownTimer';
 import BidSection from '@/components/BidSection';
@@ -9,13 +11,40 @@ import LiveChat from '@/components/LiveChat';
 import Link from 'next/link';
 import {
   FiArrowLeft, FiMapPin, FiCalendar, FiActivity, FiShare2, FiHeart,
-  FiInfo, FiLoader, FiChevronLeft, FiChevronRight, FiImage,
+  FiInfo, FiLoader, FiChevronLeft, FiChevronRight, FiImage, FiMessageSquare,
 } from 'react-icons/fi';
 
 export default function AuctionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
+  const { user } = useAuth();
   const [auction, setAuction] = useState<Auction | null | 'not-found'>(null);
   const [imageIndex, setImageIndex] = useState(0);
+  const [contactLoading, setContactLoading] = useState(false);
+
+  async function contactSeller() {
+    if (!user) {
+      router.push(`/login?redirect=/auktion/${id}`);
+      return;
+    }
+    if (auction && auction !== 'not-found' && user.uid === auction.sellerId) return;
+    if (!auction || auction === 'not-found') return;
+    setContactLoading(true);
+    try {
+      const convoId = await startOrGetConversation({
+        me: { uid: user.uid, displayName: user.displayName || user.email },
+        other: {
+          uid: auction.sellerId,
+          displayName: auction.sellerCompany || auction.sellerName,
+        },
+        auction: { id: auction.id, title: auction.car.title },
+      });
+      router.push(`/postfach/${convoId}`);
+    } catch (err) {
+      console.error('[ContactSeller]', err);
+      setContactLoading(false);
+    }
+  }
 
   useEffect(() => {
     const unsubscribe = onAuctionUpdate(id, (data) => {
@@ -256,10 +285,21 @@ export default function AuctionPage({ params }: { params: Promise<{ id: string }
               <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold">
                 {(auction.sellerCompany || auction.sellerName).charAt(0)}
               </div>
-              <div>
-                <p className="text-sm font-semibold">{auction.sellerCompany || auction.sellerName}</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold truncate">{auction.sellerCompany || auction.sellerName}</p>
                 <p className="text-xs text-muted">Verifizierter Händler</p>
               </div>
+              {user?.uid !== auction.sellerId && (
+                <button
+                  type="button"
+                  onClick={contactSeller}
+                  disabled={contactLoading}
+                  className="inline-flex items-center gap-1.5 bg-input-bg border border-card-border hover:border-accent/60 disabled:opacity-50 text-foreground text-xs font-medium px-3 py-2 rounded-lg transition-colors"
+                >
+                  {contactLoading ? <FiLoader className="w-3.5 h-3.5 animate-spin" /> : <FiMessageSquare className="w-3.5 h-3.5" />}
+                  Kontaktieren
+                </button>
+              )}
             </div>
           </div>
 

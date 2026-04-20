@@ -94,29 +94,33 @@ export default function ErstellenPage() {
       const endTime = new Date(startTime.getTime() + durationHours * 60 * 60 * 1000);
       const carId = `car_${Date.now()}`;
 
-      // Create auction doc first to get ID, then upload images
-      const auctionId = await createAuction({
+      // Build car object, omitting undefined fields (Firestore rejects undefined)
+      const car: Record<string, unknown> = {
+        id: carId,
+        title: `${form.year} ${form.make} ${form.model}`,
+        make: form.make,
+        model: form.model,
+        year: parseInt(form.year, 10),
+        mileage: parseInt(form.mileage, 10),
+        fuelType: form.fuelType,
+        transmission: form.transmission,
+        power: form.power,
+        color: form.color,
+        description: form.description,
+        images: [],
+        location: form.location,
+        features: selectedFeatures,
+      };
+      if (form.vin) car.vin = form.vin;
+      if (form.damages) car.damages = form.damages;
+
+      // Admins and verified dealers can publish immediately; unverified dealers go to pending.
+      const isAutoApproved = user.role === 'admin' || user.verified === true;
+
+      const auctionPayload: Record<string, unknown> = {
         sellerId: user.uid,
         sellerName: user.displayName || user.email,
-        sellerCompany: user.companyName,
-        car: {
-          id: carId,
-          title: `${form.year} ${form.make} ${form.model}`,
-          make: form.make,
-          model: form.model,
-          year: parseInt(form.year, 10),
-          mileage: parseInt(form.mileage, 10),
-          fuelType: form.fuelType,
-          transmission: form.transmission,
-          power: form.power,
-          color: form.color,
-          description: form.description,
-          images: [], // will update after upload
-          location: form.location,
-          vin: form.vin || undefined,
-          damages: form.damages || undefined,
-          features: selectedFeatures,
-        },
+        car,
         startPrice: parseInt(form.startPrice, 10),
         currentBid: 0,
         minimumIncrement: 500,
@@ -125,36 +129,22 @@ export default function ErstellenPage() {
         highestBidderName: '',
         startTime,
         endTime,
-        status: 'pending',
+        status: isAutoApproved ? 'active' : 'pending',
         buyerFee: 250,
-        approved: false,
+        approved: isAutoApproved,
         winnerPaid: false,
-      });
+      };
+      if (user.companyName) auctionPayload.sellerCompany = user.companyName;
+
+      const auctionId = await createAuction(auctionPayload as Parameters<typeof createAuction>[0]);
 
       // Upload images and update the auction
       if (imageFiles.length > 0) {
         const imageUrls = await uploadImages(auctionId);
         const { updateAuction } = await import('@/lib/firestore');
         await updateAuction(auctionId, {
-          car: {
-            id: carId,
-            title: `${form.year} ${form.make} ${form.model}`,
-            make: form.make,
-            model: form.model,
-            year: parseInt(form.year, 10),
-            mileage: parseInt(form.mileage, 10),
-            fuelType: form.fuelType,
-            transmission: form.transmission,
-            power: form.power,
-            color: form.color,
-            description: form.description,
-            images: imageUrls,
-            location: form.location,
-            vin: form.vin || undefined,
-            damages: form.damages || undefined,
-            features: selectedFeatures,
-          },
-        });
+          car: { ...car, images: imageUrls },
+        } as Parameters<typeof updateAuction>[1]);
       }
 
       setSubmitted(true);
@@ -188,13 +178,20 @@ export default function ErstellenPage() {
   }
 
   if (submitted) {
+    const isAutoApproved = user && (user.role === 'admin' || user.verified === true);
     return (
       <div className="max-w-lg mx-auto px-4 py-20 text-center">
         <div className="w-16 h-16 bg-success/20 rounded-full flex items-center justify-center mx-auto mb-4">
           <FiCheck className="w-8 h-8 text-success" />
         </div>
-        <h2 className="text-2xl font-bold mb-2">Auktion eingereicht!</h2>
-        <p className="text-muted text-sm mb-6">Wird nach Admin-Prüfung freigeschaltet. Das dauert in der Regel bis zu 24 Stunden.</p>
+        <h2 className="text-2xl font-bold mb-2">
+          {isAutoApproved ? 'Auktion ist live!' : 'Auktion eingereicht!'}
+        </h2>
+        <p className="text-muted text-sm mb-6">
+          {isAutoApproved
+            ? 'Deine Auktion ist ab sofort auf der Startseite sichtbar.'
+            : 'Wird nach Admin-Prüfung freigeschaltet (i.d.R. innerhalb 24h).'}
+        </p>
         <Link
           href="/dashboard/haendler"
           className="inline-flex items-center gap-2 bg-accent hover:bg-accent-hover text-black font-bold px-6 py-3 rounded-xl text-sm transition-colors"
@@ -470,14 +467,20 @@ export default function ErstellenPage() {
                 className="flex-1 bg-accent hover:bg-accent-hover text-black font-bold py-3 rounded-xl text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {submitting && <FiLoader className="w-4 h-4 animate-spin" />}
-                {submitting ? 'Wird hochgeladen...' : 'Zur Prüfung einreichen'}
+                {submitting
+                  ? 'Wird hochgeladen...'
+                  : (user && (user.role === 'admin' || user.verified === true))
+                    ? 'Jetzt veröffentlichen'
+                    : 'Zur Prüfung einreichen'}
               </button>
             </div>
 
-            <div className="flex items-start gap-2 text-xs text-muted">
-              <FiAlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-              <p>Auktionen werden nach Admin-Prüfung (i.d.R. innerhalb von 24h) veröffentlicht.</p>
-            </div>
+            {user && !(user.role === 'admin' || user.verified === true) && (
+              <div className="flex items-start gap-2 text-xs text-muted">
+                <FiAlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                <p>Auktionen werden nach Admin-Prüfung (i.d.R. innerhalb 24h) veröffentlicht.</p>
+              </div>
+            )}
           </div>
         )}
       </form>
