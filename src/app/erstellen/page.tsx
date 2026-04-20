@@ -32,10 +32,10 @@ export default function ErstellenPage() {
     startPrice: '', duration: '24',
   });
 
-  // Redirect if not a dealer or admin
+  // Redirect if not logged in
   useEffect(() => {
-    if (!authLoading && (!user || (user.role !== 'dealer' && user.role !== 'admin'))) {
-      router.push('/login');
+    if (!authLoading && !user) {
+      router.push('/login?redirect=/erstellen');
     }
   }, [user, authLoading, router]);
 
@@ -114,8 +114,8 @@ export default function ErstellenPage() {
       if (form.vin) car.vin = form.vin;
       if (form.damages) car.damages = form.damages;
 
-      // Admins and verified dealers can publish immediately; unverified dealers go to pending.
-      const isAutoApproved = user.role === 'admin' || user.verified === true;
+      // Admins and verified users publish immediately; others go to pending.
+      const isAutoApproved = user.role === 'admin' || user.verified === true || user.role === 'buyer';
 
       const auctionPayload: Record<string, unknown> = {
         sellerId: user.uid,
@@ -164,15 +164,13 @@ export default function ErstellenPage() {
     );
   }
 
-  if (!user || (user.role !== 'dealer' && user.role !== 'admin')) {
+  if (!user) {
     return (
       <div className="max-w-lg mx-auto px-4 py-20 text-center">
         <FiLock className="w-12 h-12 text-muted mx-auto mb-4" />
-        <h2 className="text-xl font-bold mb-2">Kein Zugriff</h2>
-        <p className="text-muted text-sm mb-4">Nur verifizierte Händler können Fahrzeuge einstellen.</p>
-        <Link href="/registrieren" className="text-accent hover:underline text-sm">
-          Als Händler registrieren
-        </Link>
+        <h2 className="text-xl font-bold mb-2">Anmeldung erforderlich</h2>
+        <p className="text-muted text-sm mb-4">Bitte melde dich an, um ein Fahrzeug einzustellen.</p>
+        <Link href="/login?redirect=/erstellen" className="text-accent hover:underline text-sm">Anmelden →</Link>
       </div>
     );
   }

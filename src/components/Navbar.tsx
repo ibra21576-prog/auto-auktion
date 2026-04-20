@@ -74,15 +74,13 @@ export default function Navbar() {
                     </span>
                   )}
                 </Link>
-                {(user.role === 'dealer' || user.role === 'admin') && (
-                  <Link
-                    href="/erstellen"
-                    className="flex items-center gap-1.5 text-sm bg-accent hover:bg-accent-hover text-black font-semibold px-4 py-2 rounded-lg transition-colors"
-                  >
-                    <FiPlus className="w-4 h-4" />
-                    Auto einstellen
-                  </Link>
-                )}
+                <Link
+                  href="/erstellen"
+                  className="flex items-center gap-1.5 text-sm bg-accent hover:bg-accent-hover text-black font-semibold px-4 py-2 rounded-lg transition-colors"
+                >
+                  <FiPlus className="w-4 h-4" />
+                  Auto einstellen
+                </Link>
 
                 {/* User Menu */}
                 <div className="flex items-center gap-3 ml-2 pl-4 border-l border-card-border">
@@ -144,15 +142,13 @@ export default function Navbar() {
             {user ? (
               <>
                 {(user.role === 'dealer' || user.role === 'admin') && (
-                  <>
-                    <Link href="/dashboard/haendler" className="block px-3 py-2 text-sm text-muted hover:text-foreground rounded-lg hover:bg-input-bg" onClick={() => setMenuOpen(false)}>
-                      Meine Auktionen
-                    </Link>
-                    <Link href="/erstellen" className="block px-3 py-2 text-sm text-accent font-semibold rounded-lg hover:bg-input-bg" onClick={() => setMenuOpen(false)}>
-                      + Auto einstellen
-                    </Link>
-                  </>
+                  <Link href="/dashboard/haendler" className="block px-3 py-2 text-sm text-muted hover:text-foreground rounded-lg hover:bg-input-bg" onClick={() => setMenuOpen(false)}>
+                    Meine Auktionen
+                  </Link>
                 )}
+                <Link href="/erstellen" className="block px-3 py-2 text-sm text-accent font-semibold rounded-lg hover:bg-input-bg" onClick={() => setMenuOpen(false)}>
+                  + Auto einstellen
+                </Link>
                 {user.role === 'admin' && (
                   <Link href="/dashboard/admin" className="block px-3 py-2 text-sm text-danger hover:text-foreground rounded-lg hover:bg-input-bg" onClick={() => setMenuOpen(false)}>
                     Admin Dashboard
