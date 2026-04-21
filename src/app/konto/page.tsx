@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useAuth } from '@/context/AuthContext';
 import { getPaymentsByBuyer } from '@/lib/firestore';
 import { PaymentRecord } from '@/types';
@@ -9,6 +10,12 @@ import {
   FiCreditCard, FiUser, FiCheckCircle, FiAlertCircle,
   FiShield, FiPackage, FiLoader, FiLock,
 } from 'react-icons/fi';
+
+// Stripe Elements must be loaded client-side only
+const PaymentForm = dynamic(() => import('@/components/PaymentForm'), {
+  ssr: false,
+  loading: () => <div className="flex justify-center py-8"><FiLoader className="w-6 h-6 text-accent animate-spin" /></div>,
+});
 
 export default function KontoPage() {
   const { user, loading: authLoading } = useAuth();
@@ -126,51 +133,27 @@ export default function KontoPage() {
       {activeTab === 'zahlung' && (
         <div className="space-y-4">
           {!user.paymentVerified ? (
-            <div className="bg-card-bg border border-accent/30 rounded-xl p-6">
-              <div className="flex items-start gap-3 mb-5">
+            <div className="bg-card-bg border border-accent/30 rounded-xl p-6 space-y-5">
+              <div className="flex items-start gap-3">
                 <FiAlertCircle className="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="font-semibold text-accent text-sm">Zahlungsmethode erforderlich</p>
                   <p className="text-xs text-muted mt-1">
-                    Um auf Auktionen bieten zu können, müssen Sie eine Zahlungsmethode hinterlegen.
-                    Diese wird nur belastet, wenn Sie eine Auktion gewinnen (Zuschlagspreis + 250 € Käufergebühr).
+                    Um auf Auktionen bieten zu können, hinterlege eine Zahlungsmethode.
+                    Sie wird nur belastet, wenn du eine Auktion gewinnst (Zuschlag + 250 € Käufergebühr).
                   </p>
                 </div>
               </div>
 
-              <div className="bg-input-bg border border-card-border rounded-xl p-5 mb-4">
+              <div className="bg-input-bg border border-card-border rounded-xl p-5">
                 <p className="text-sm font-semibold mb-4 flex items-center gap-2">
                   <FiCreditCard className="w-4 h-4 text-accent" />
                   Zahlungsmethode hinzufügen
                 </p>
-                {/* Stripe Elements would be mounted here in production */}
-                <div className="space-y-3">
-                  <div className="bg-card-bg border border-card-border rounded-lg px-3 py-3">
-                    <p className="text-xs text-muted">Kartennummer</p>
-                    <p className="text-sm text-muted italic mt-0.5">•••• •••• •••• ••••</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-card-bg border border-card-border rounded-lg px-3 py-3">
-                      <p className="text-xs text-muted">Ablaufdatum</p>
-                      <p className="text-sm text-muted italic mt-0.5">MM / JJ</p>
-                    </div>
-                    <div className="bg-card-bg border border-card-border rounded-lg px-3 py-3">
-                      <p className="text-xs text-muted">CVC</p>
-                      <p className="text-sm text-muted italic mt-0.5">•••</p>
-                    </div>
-                  </div>
-                </div>
-                <p className="text-xs text-muted mt-3 flex items-center gap-1">
-                  <FiShield className="w-3 h-3" />
-                  Verschlüsselt & sicher via Stripe. Keine Zahlungsdaten auf unseren Servern.
-                </p>
+                <PaymentForm onSuccess={() => window.location.reload()} />
               </div>
 
-              <button className="w-full bg-accent hover:bg-accent-hover text-black font-bold py-2.5 rounded-xl text-sm transition-colors">
-                Zahlungsmethode speichern
-              </button>
-
-              <div className="mt-4 bg-input-bg rounded-xl p-4">
+              <div className="bg-input-bg rounded-xl p-4">
                 <p className="text-xs font-semibold mb-2">So funktioniert es:</p>
                 <ul className="text-xs text-muted space-y-1.5">
                   <li>✓ Karte wird <strong className="text-foreground">nicht</strong> sofort belastet</li>
@@ -181,21 +164,32 @@ export default function KontoPage() {
               </div>
             </div>
           ) : (
-            <div className="bg-card-bg border border-card-border rounded-xl p-5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-success/20 rounded-xl flex items-center justify-center">
-                    <FiCreditCard className="w-5 h-5 text-success" />
+            <div className="space-y-4">
+              <div className="bg-card-bg border border-card-border rounded-xl p-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-success/20 rounded-xl flex items-center justify-center">
+                      <FiCreditCard className="w-5 h-5 text-success" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">Zahlungsmethode hinterlegt</p>
+                      <p className="text-xs text-muted">Wird nur bei Gewinn einer Auktion belastet</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold">Zahlungsmethode hinterlegt</p>
-                    <p className="text-xs text-muted">Wird nur bei Gewinn einer Auktion belastet</p>
-                  </div>
+                  <span className="text-xs text-success font-semibold flex items-center gap-1">
+                    <FiCheckCircle className="w-3.5 h-3.5" /> Aktiv
+                  </span>
                 </div>
-                <span className="text-xs text-success font-semibold flex items-center gap-1">
-                  <FiCheckCircle className="w-3.5 h-3.5" /> Aktiv
-                </span>
               </div>
+              {/* Allow replacing the payment method */}
+              <details className="bg-card-bg border border-card-border rounded-xl overflow-hidden">
+                <summary className="px-5 py-4 text-sm text-muted cursor-pointer hover:text-foreground select-none">
+                  Zahlungsmethode ersetzen
+                </summary>
+                <div className="px-5 pb-5">
+                  <PaymentForm onSuccess={() => window.location.reload()} />
+                </div>
+              </details>
             </div>
           )}
         </div>
