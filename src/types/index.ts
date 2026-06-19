@@ -21,17 +21,37 @@ export interface Car {
   title: string;
   make: string;
   model: string;
+  variant?: string;
   year: number;
+  firstRegistration?: string;
   mileage: number;
   fuelType: string;
   transmission: string;
+  bodyType?: string;
   power: string;
+  engineSize?: string;
+  cylinders?: string;
+  drive?: string;
+  doors?: string;
+  seats?: string;
   color: string;
+  colorType?: string;
+  interiorColor?: string;
+  interiorMaterial?: string;
   description: string;
   images: string[];
   location: string;
-  vin?: string;              // Vehicle Identification Number
-  damages?: string;          // Known damages description
+  vin?: string;
+  condition?: string;
+  previousOwners?: string;
+  huMonth?: string;
+  huYear?: string;
+  serviceHistory?: boolean;
+  nonSmoker?: boolean;
+  consumption?: string;
+  co2?: string;
+  emissionClass?: string;
+  damages?: string;
   features: string[];
 }
 
